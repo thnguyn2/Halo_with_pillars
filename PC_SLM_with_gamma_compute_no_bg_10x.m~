@@ -22,7 +22,6 @@ gamma = exp(i*(uphi_denoised));
 inverse = 1;
 %bw_array = linspace(15,15,1);%Specify the bandwidth 
 
-
 bg.bgxx1 = 65;
 bg.bgxx2 = 391;
 bg.bgyy1 = 1678;
@@ -49,7 +48,7 @@ if (inverse)
 
      maxbg_phase = 0.5;
      method = 'relax';
-     gpu_compute_en = 0;
+     gpu_compute_en = ;
      writeTIFF((cast(uphi,'double')),strcat(fname,'_org.tif'))
      if (gpu_compute_en==0)
           [gk,tk,tk0] = estimate_gt(gamma,h,niter,lambda_weight,beta_weight,tol,method,bg);

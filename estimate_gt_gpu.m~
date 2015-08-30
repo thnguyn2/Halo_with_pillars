@@ -1,4 +1,4 @@
-function [gk,tk] = estimate_gt_gpu(gamma,h,niter,lambda,beta_weight,tol,method,bg)
+function [gk,tk] = estimate_gt_gpu(gamma,h,niter,lambda,beta_weight,tol,method,smart_init_en)
     %This function compute the estimation for gk and tk given gamma on GPU.
     %GPU is used to speed up the calculation of fft2 and ifft2
     
@@ -25,21 +25,26 @@ function [gk,tk] = estimate_gt_gpu(gamma,h,niter,lambda,beta_weight,tol,method,b
     h1d=gpuArray(h1);
     hfd = fft2(h1d);
     
-    init_eps = 1e-3;%Smart initialization regularization factor
-    hipdf = 1-hfd; %This is the fourier transform of delta - hf filter
-    ang_gammadf = fft2(angle(gammad));
-    ang_tkdf0=(conj(hipdf).*ang_gammadf)./(abs(hipdf).^2+init_eps);%Weiner deconvolution
-    ang_tkd0 =ifft2(ang_tkdf0);
-    tkd = exp(i*real(ang_tkd0));
+    if (smart_init_en==0)
+       tk = ones(size(gamma));%Normal initialization
+       tk = cast(tk,'single');
+       tkd = gpuArray(tk);
+    else
+        init_eps = 1e-3;%Smart initialization regularization factor
+        hipdf = 1-hfd; %This is the fourier transform of delta - hf filter
+        ang_gammadf = fft2(angle(gammad));
+        ang_tkdf0=(conj(hipdf).*ang_gammadf)./(abs(hipdf).^2+init_eps);%Weiner deconvolution
+        ang_tkd0 =ifft2(ang_tkdf0);
+        tkd = exp(i*real(ang_tkd0));
+    end
     
 
     %Next, solve with the iterative method
-    [obj,val1,val2]  = objective_comp(gammad,hfd,tkd,gkd,lambda,beta_weight,nrows,ncols);
-     disp(['Iter ' num2str(0) ': current objective: ' num2str(obj) ', 1st: ' num2str(val1),...
-       ', 2nd: ' num2str(val2)]);
+    obj = objective_comp(gammad,hfd,tkd,gkd,lambda,beta_weight,nrows,ncols);
+    disp(['Iter ' num2str(0) ': current objective: ' num2str(obj)]);
     prevobj = 0;
     bestobj = obj;
-    bgfilter = fspecial('gaussian',[150 150],50);
+    bgfilter = fspecial('gaussian',[150 150],50)l;
     bgfilterd = gpuArray(bgfilter);
     for iter=1:niter
         if (mod(iter,500)==0)
@@ -74,13 +79,23 @@ function [gk,tk] = estimate_gt_gpu(gamma,h,niter,lambda,beta_weight,tol,method,b
        %Cast T as the transmittance of a phase obj
        tkd = exp(i*angle(tkd));
 
-       [obj,val1,val2] = objective_comp(gammad,hfd,tkd,gkd,lambda,beta_weight,nrows,ncols);
+       obj = objective_comp(gammad,hfd,tkd,gkd,lambda,beta_weight,nrows,ncols);
        relerr  = abs(obj-prevobj)/obj;
-    
+       if (obj<bestobj)
+            besttkd = tkd;
+       else
+            method = 'cg';
+        end
         te = toc;
-          disp(['Iter ' num2str(iter) ': current objective: ' num2str(obj) ', 1st: ' num2str(val1),...
-        ', 2nd: ' num2str(val2)]);
-        prevobj = obj;
+        disp(['Iter ' num2str(iter) ': current objective: ' num2str(obj) ,'/Relative error: ',...
+           num2str(relerr),'/Time: ',num2str(te),' (s)']);
+        if ((relerr<1e-8)&&(iter>1))
+       %  if (((relerr<1e-6))&&(iter>1))
+        
+            break;
+        else
+           prevobj = obj;
+        end
         
         %Draw the heat map for the error
          anglemap = angle(tkd)-mean(mean(angle(tkd)));

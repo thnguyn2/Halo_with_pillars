@@ -41,7 +41,7 @@ function [gk,tk,tk0] = estimate_gt(gamma,h,niter,lambda,beta_weight,tol,method,b
         %First, recover g from t
         tkf = fft2(tk);
         gk = (tk.*cjgamma+lambda*ifft2(tkf.*hf))./(conj(tk).*tk+lambda+1e-8);
-        gk2 = imfilter(gk,fspecial('gaussian',[150 150],50),'same');
+        gk2 = imfilter(gk,fspecial('gaussian',[150 150],20),'same');
         gk = gk./exp(i*angle(gk2));%Get rid of the low frequency smooth variation in gk
         
         switch method
@@ -60,7 +60,7 @@ function [gk,tk,tk0] = estimate_gt(gamma,h,niter,lambda,beta_weight,tol,method,b
         [obj,val1,val2] = objective_comp(gamma,hf,tk,gk,lambda,beta_weight,nrows,ncols);
         %obj_array(end+1)=obj;
         te = toc;
-        disp(['Iter ' num2str(iter) ': current objective: ' num2str(obj) ', 1st: ' num2str(val1),...
+         disp(['Iter ' num2str(iter) ': current objective: ' num2str(obj) ', 1st: ' num2str(val1),...
         ', 2nd: ' num2str(val2)]);
         %Make sure that our phase is not offsett
         gamma_phase = angle(tk);
